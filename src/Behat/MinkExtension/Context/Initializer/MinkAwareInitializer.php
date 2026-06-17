@@ -12,7 +12,6 @@ namespace Behat\MinkExtension\Context\Initializer;
 
 use Behat\Behat\Context\Context;
 use Behat\Behat\Context\Initializer\ContextInitializer;
-
 use Behat\Mink\Mink;
 use Behat\MinkExtension\Context\MinkAwareContext;
 
@@ -24,26 +23,15 @@ use Behat\MinkExtension\Context\MinkAwareContext;
  */
 class MinkAwareInitializer implements ContextInitializer
 {
-    private Mink $mink;
-    private array $parameters;
-
     /**
-     * Initializes initializer.
-     *
-     * @param Mink  $mink
-     * @param array $parameters
+     * @param array<string, mixed> $parameters
      */
-    public function __construct(Mink $mink, array $parameters)
-    {
-        $this->mink       = $mink;
-        $this->parameters = $parameters;
+    public function __construct(
+        private readonly Mink $mink,
+        private readonly array $parameters,
+    ) {
     }
 
-    /**
-     * Initializes provided context.
-     *
-     * @param Context $context
-     */
     public function initializeContext(Context $context): void
     {
         if (!$context instanceof MinkAwareContext) {
