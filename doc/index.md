@@ -8,7 +8,7 @@ and languages provide functional testing tools. Today we'll talk about how to
 use Behat for functional testing of web applications. [Mink](http://mink.behat.org)
 is a tool exactly for that and this extension provides integration for it.
 
-Basically, MinkExtension is an integration layer between Behat 3.0+ and Mink 1.4+
+Basically, MinkExtension is an integration layer between Behat 3.32+ and Mink 1.11+
 and it provides:
 
 * Additional services for Behat (`Mink`, `Sessions`, `Drivers`).
@@ -22,8 +22,8 @@ and it provides:
 
 This extension requires:
 
-* Behat 3.0+
-* Mink 1.4+
+* Behat 3.32+ or 4.0+
+* Mink 1.11+
 
 ### Through Composer
 
@@ -35,18 +35,32 @@ The easiest way to keep your suite updated is to use [Composer](http://getcompos
     $ composer require --dev behat/mink-extension
     ```
 
-2. Activate the extension by specifying its class in your `behat.yml`:
+2. Activate the extension by specifying its class in your `behat.php`:
 
-    ```yaml
-    # behat.yml
-    default:
-      # ...
-      extensions:
-        Behat\MinkExtension:
-          base_url:  'http://example.com'
-          sessions:
-            default:
-              goutte: ~
+    ```php
+    # behat.php
+    
+    use Behat\Config\Config;
+    use Behat\Config\Extension;
+    use Behat\Config\Profile;
+    use Behat\Config\Suite;
+    use Behat\MinkExtension\ServiceContainer\MinkExtension;
+
+    return (new Config())
+        ->withProfile(
+            (new Profile('default'))
+                //... suite configuration
+                ->withExtension(
+                    new Extension(MinkExtension::class, [
+                        'base_url' => 'http://example.com/',
+                        'sessions' => [
+                            'default' => [
+                                'browserkit_http' => null,
+                            ],
+                        ],
+                    ])
+                )
+        );
     ```
 
 ## Usage
@@ -94,13 +108,26 @@ After installing the extension, there are 4 usage options available:
    Exactly like the previous option, but gives you the ability to keep your main context
    class clean.
 
-    ```yaml
-    default:
-      suites:
-        my_suite:
-          contexts:
-            - FeatureContext
-            - Behat\MinkExtension\Context\MinkContext
+    ```php
+    
+    use Behat\Config\Config;
+    use Behat\Config\Extension;
+    use Behat\Config\Profile;
+    use Behat\Config\Suite;
+    use Behat\MinkExtension\Context\MinkContext::class;
+
+    return (new Config())
+        ->withProfile(
+            (new Profile('default'))
+                ->withSuite(
+                    (new Suite('default'))
+                        ->withContexts(
+                            \FeatureContext::class,
+                            MinkContext::class
+                        )
+                )
+                // ... extension config as above
+        );
     ```
 
     > [!NOTE]
@@ -114,7 +141,7 @@ There are common things between these methods. In each of those, the target cont
 `setMink(Mink $mink)` and `setMinkParameters(array $parameters)` methods. Those methods would
 be automatically called *immediately after* each context creation before each scenario. And
 this `$mink` instance will be preconfigured based on the settings you've provided in your
-`behat.yml`.
+`behat.php`.
 
 ## Configuration
 
@@ -126,17 +153,35 @@ the ability to configure Mink inside Behat to fulfil all your needs.
 You can register as many Mink sessions as you want. For each session, you
 will need to choose the driver you want to use.
 
-```yaml
-default:
-    extensions:
-        Behat\MinkExtension:
-            sessions:
-                first_session:
-                    selenium2: ~
-                second_session:
-                    goutte: ~
-                third_session:
-                    selenium2: ~
+```php
+# behat.php
+
+use Behat\Config\Config;
+use Behat\Config\Extension;
+use Behat\Config\Profile;
+use Behat\MinkExtension\ServiceContainer\MinkExtension;
+
+return (new Config())
+    ->withProfile(
+        (new Profile('default'))
+            //... suite configuration
+            ->withExtension(
+                new Extension(MinkExtension::class, [
+                    'base_url' => 'http://example.com/',
+                    'sessions' => [
+                        'first_session' => [
+                            'selenium2' => null,
+                        ],
+                        'second_session' => [
+                            'browserkit_http' => null,
+                        ],
+                        'third_session' => [
+                            'selenium2' => null,
+                        ]
+                    ],
+                ])
+            )
+    );
 ```
 
 MinkExtension will set the default Mink session for each scenario based on
@@ -150,12 +195,26 @@ and on scenario tags:
 The default session and the default `javascript` session can also be configured for
 each suite:
 
-```yaml
-default:
-    suites:
-        first:
-            mink_session: foo
-            mink_javascript_session: sahi
+ ```php
+    
+use Behat\Config\Config;
+use Behat\Config\Profile;
+use Behat\Config\Suite;
+
+return (new Config())
+    ->withProfile(
+        (new Profile('default'))
+            ->withSuite(
+                (new Suite(
+                    'first',
+                    [
+                        'mink_session'=> 'foo',
+                        'mink_javascript_session' => 'selenium2',
+                    ]
+                )
+            )
+            // ... extension config as above, defining a `foo` and `selenium2` session
+    );
 ```
 
 If it is not configured explicitly, the `javascript` session is set to the first
@@ -163,161 +222,205 @@ session using a javascript driver in the order of the configuration (it would
 be `first_session` in the example above as `selenium2` supports Javascript).
 If it is not configured explicitly, the default session is set to the first
 session using a non-javascript driver if any, or to the first javascript session
-otherwise (it would be `second_session` above as `goutte` does not support
-javascript).
+otherwise (it would be `second_session` above as `browserkit_http` does not
+support javascript).
 
 ### Drivers
 
 First of all, there are drivers enabling configuration. MinkExtension comes
-with support for 7 drivers out of the box:
+with support for the following drivers out of the box:
 
-* `GoutteDriver` - headless driver without JavaScript support. In order to use
-  it, modify your `behat.yml` profile:
+* `browserkit_http` - headless driver without JavaScript support, based on
+  Symfony's BrowserKit and HttpClient components. It is the recommended
+  replacement for the removed Goutte driver. In order to use it, install
+  `behat/mink-browserkit-driver` and modify your `behat.php` profile:
 
-    > [!IMPORTANT]
-    > Support for this driver has been deprecated, since the driver package has been abandoned.
-    > It will be removed in the next major version of this extension.
+    ```php
+    # behat.php
 
-    ```yaml
-    default:
-        extensions:
-            Behat\MinkExtension:
-                sessions:
-                    my_session:
-                        goutte: ~
+    use Behat\Config\Config;
+    use Behat\Config\Extension;
+    use Behat\Config\Profile;
+    use Behat\MinkExtension\ServiceContainer\MinkExtension;
+
+    return (new Config())
+        ->withProfile(
+            (new Profile('default'))
+                //... suite configuration
+                ->withExtension(
+                    new Extension(MinkExtension::class, [
+                        'base_url' => 'http://example.com/',
+                        'sessions' => [
+                            'my_session' => [
+                                'browserkit_http' => null,
+                            ],
+                        ],
+                    ])
+                )
+        );
     ```
 
   **Tips: HTTPS and self-signed certificate**
 
-  If you use Behat/Mink/Goutte to test your application, and want to test an
-  application secured with HTTPS, but with a self-signed certificate, you can use
-  the following parameters to avoid the validation error triggered by Guzzle:
+  If you want to test an application secured with HTTPS but using a self-signed
+  certificate, you can disable certificate verification through the underlying
+  Symfony HttpClient via `http_client_parameters`:
 
-  * For `Guzzle 4` or later:
+    ```php
+    # behat.php
 
-      ```yaml
-      default:
-          extensions:
-              Behat\MinkExtension:
-                  sessions:
-                      my_session:
-                          goutte:
-                              guzzle_parameters:
-                                  verify: false
-      ```
+    use Behat\Config\Config;
+    use Behat\Config\Extension;
+    use Behat\Config\Profile;
+    use Behat\MinkExtension\ServiceContainer\MinkExtension;
 
-  * For `Guzzle 3` or earlier:
-
-      ```yaml
-      default:
-          extensions:
-              Behat\MinkExtension:
-                  sessions:
-                      my_session:
-                          goutte:
-                              guzzle_parameters:
-                                  ssl.certificate_authority: false
-      ```
+    return (new Config())
+        ->withProfile(
+            (new Profile('default'))
+                //... suite configuration
+                ->withExtension(
+                    new Extension(MinkExtension::class, [
+                        'base_url' => 'http://example.com/',
+                        'sessions' => [
+                            'my_session' => [
+                                'browserkit_http' => [
+                                    'http_client_parameters' => [
+                                        'verify_peer' => false,
+                                        'verify_host' => false,
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ])
+                )
+        );
+    ```
 
 * `Selenium2Driver` - javascript driver. In order to use it, modify your
-  `behat.yml` profile:
+  `behat.php` profile:
 
-    ```yaml
-    default:
-        extensions:
-            Behat\MinkExtension:
-                sessions:
-                    my_session:
-                        selenium2: ~
+    ```php
+    # behat.php
+
+    use Behat\Config\Config;
+    use Behat\Config\Extension;
+    use Behat\Config\Profile;
+    use Behat\MinkExtension\ServiceContainer\MinkExtension;
+
+    return (new Config())
+        ->withProfile(
+            (new Profile('default'))
+                //... suite configuration
+                ->withExtension(
+                    new Extension(MinkExtension::class, [
+                        'base_url' => 'http://example.com/',
+                        'sessions' => [
+                            'my_session' => [
+                                'selenium2' => null,
+                            ],
+                        ],
+                    ])
+                )
+        );
+    ```
+
+* `Selenium4Driver` - javascript driver for Selenium 4 / W3C WebDriver. Its basic
+  usage is analogous to `selenium2` (it also accepts `browser` and `wd_host`), but
+  it exposes an extra `name` option and expects W3C-style `capabilities` structured
+  under `alwaysMatch` / `firstMatch` (e.g. `goog:chromeOptions`). In order to use it,
+  modify your `behat.php` profile:
+
+    ```php
+    # behat.php
+
+    use Behat\Config\Config;
+    use Behat\Config\Extension;
+    use Behat\Config\Profile;
+    use Behat\MinkExtension\ServiceContainer\MinkExtension;
+
+    return (new Config())
+        ->withProfile(
+            (new Profile('default'))
+                //... suite configuration
+                ->withExtension(
+                    new Extension(MinkExtension::class, [
+                        'base_url' => 'http://example.com/',
+                        'sessions' => [
+                            'my_session' => [
+                                'selenium4' => null,
+                            ],
+                        ],
+                    ])
+                )
+        );
     ```
 
 * `SauceLabsDriver` - special flavor of the Selenium2Driver configured to use the
   selenium2 hosted installation of saucelabs.com. In order to use it, modify your
-  `behat.yml` profile:
+  `behat.php` profile:
 
-    ```yaml
-    default:
-        extensions:
-            Behat\MinkExtension:
-                sessions:
-                    my_session:
-                        sauce_labs: ~
+    
+    ```php
+    # behat.php
+
+    use Behat\Config\Config;
+    use Behat\Config\Extension;
+    use Behat\Config\Profile;
+    use Behat\MinkExtension\ServiceContainer\MinkExtension;
+
+    return (new Config())
+        ->withProfile(
+            (new Profile('default'))
+                //... suite configuration
+                ->withExtension(
+                    new Extension(MinkExtension::class, [
+                        'base_url' => 'http://example.com/',
+                        'sessions' => [
+                            'my_session' => [
+                                'sauce_labs' => null,
+                            ],
+                        ],
+                    ])
+                )
+        );
     ```
-
+    
 * `BrowserStackDriver` - special flavor of the Selenium2Driver configured to use the
   selenium2 hosted installation of browserstack.com. In order to use it, modify your
-  `behat.yml` profile:
+  `behat.php` profile:
 
-    ```yaml
-    default:
-        extensions:
-            Behat\MinkExtension:
-                sessions:
-                    my_session:
-                        browser_stack: ~
+    
+    ```php
+    # behat.php
+
+    use Behat\Config\Config;
+    use Behat\Config\Extension;
+    use Behat\Config\Profile;
+    use Behat\MinkExtension\ServiceContainer\MinkExtension;
+
+    return (new Config())
+        ->withProfile(
+            (new Profile('default'))
+                //... suite configuration
+                ->withExtension(
+                    new Extension(MinkExtension::class, [
+                        'base_url' => 'http://example.com/',
+                        'sessions' => [
+                            'my_session' => [
+                                'browser_stack' => null,
+                            ],
+                        ],
+                    ])
+                )
+        );
     ```
 
-* `SeleniumDriver` - javascript driver. In order to use it, modify your `behat.yml`
-  profile:
+If you're using Composer, you need to install the drivers that you need first:
 
-    > [!IMPORTANT]
-    > Support for this driver has been deprecated, since the driver package has been abandoned.
-    > It will be removed in the next major version of this extension.
-
-    ```yaml
-    default:
-        extensions:
-            Behat\MinkExtension:
-                sessions:
-                    my_session:
-                        selenium: ~
-    ```
-
-* `SahiDriver` - javascript driver. In order to use it, modify your `behat.yml`
-  profile:
-
-    > [!IMPORTANT]
-    > Support for this driver has been deprecated, since the driver package has been abandoned.
-    > It will be removed in the next major version of this extension.
-
-    ```yaml
-    default:
-        extensions:
-            Behat\MinkExtension:
-                sessions:
-                    my_session:
-                        sahi: ~
-    ```
-
-* `ZombieDriver` - zombie.js javascript headless driver. In order to use it, modify
-  your `behat.yml` profile:
-
-    > [!IMPORTANT]
-    > Support for this driver has been deprecated, since the driver package has been abandoned.
-    > It will be removed in the next major version of this extension.
-
-    ```yaml
-    default:
-        extensions:
-            Behat\MinkExtension:
-                sessions:
-                    default:
-                        zombie:
-                            # Specify the path to the node_modules directory.
-                            node_modules_path: /usr/local/lib/node_modules/
-    ```
-
-> [!NOTE]
-> The phar version of Mink comes bundled with all 5 drivers and you don't need to do
-> anything except enabling them in order to use them.
-
-But if you're using Composer, you need to install drivers that you need first:
-
-- GoutteDriver - `behat/mink-goutte-driver`
-- SeleniumDriver - `behat/mink-selenium-driver`
-- Selenium2Driver (also used for SauceLabs and BrowserStack) - `behat/mink-selenium2-driver`
-- SahiDriver - `behat/mink-sahi-driver`
-- ZombieDriver - `behat/mink-zombie-driver`
+- `browserkit_http` - `behat/mink-browserkit-driver` (also requires `symfony/browser-kit` and `symfony/http-client`)
+- `selenium2` (also used for SauceLabs, BrowserStack and Appium) - `behat/mink-selenium2-driver`
+- `selenium4` - `ediasoft/mink-selenium4-driver`
+- `webdriver_classic` - `mink/webdriver-classic-driver`
 
 > [!NOTE]
 > All drivers share the same API, which means that you could use multiple drivers
@@ -343,8 +446,8 @@ There's other useful parameters, that you can use to configure your suite:
   to the system temp dir)
 * `show_auto` - Whether the opened page should be shown automatically when
   a step fails.
-* `browser_name` - meta-option, that defines which browser to use for Sahi,
-  Selenium and Selenium2 drivers.
+* `browser_name` - meta-option, that defines which browser to use for the
+  Selenium2 and Selenium4 drivers.
 * `default_session` - defines the default session (driver) to be used for all
   untagged scenarios. This could be any enabled session name.
 * `javascript_session` - defines the javascript session (driver) (the one, which

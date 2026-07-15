@@ -8,39 +8,41 @@ This document summarizes the changes relevant for users when upgrading to new ve
 
 - PHP `^7.4 || ^8` → `^8.3`
 - `symfony/config` `^4.4 || ^5.0 || ^6.0 || ^7.0` → `^7.4 || ^8.0`
-- `behat/behat` `^3.0.5` → `^3.31`
+- `behat/behat` `^3.0.5` → `^3.32 || ^4.0`
+- `behat/mink` `^1.5` → `^1.11`
 
 ## Abandoned driver factories removed
 
-The `GoutteFactory`, `SeleniumFactory`, `SahiFactory` and `ZombieFactory` classes have been removed.
-These were deprecated in 2.8.0 and the underlying driver implementations are abandoned.
+The following driver factories have been removed, together with the driver identifiers you used to select
+them in the configuration, because the underlying driver implementations are abandoned:
 
-Switch to `browserkit_http` (via `behat/mink-browserkit-driver`) or another actively maintained driver.
+| Removed factory   | Driver identifier | Underlying driver |
+|-------------------|-------------------|-------------------|
+| `GoutteFactory`   | `goutte`          | GoutteDriver      |
+| `SeleniumFactory` | `selenium`        | SeleniumDriver    |
+| `SahiFactory`     | `sahi`            | SahiDriver        |
+| `ZombieFactory`   | `zombie`          | ZombieDriver      |
+
+If your `behat.php` (or legacy `behat.yml`) references any of these identifiers under `Behat\MinkExtension`,
+the configuration will no longer be valid. Switch to an actively maintained driver, such as
+`browserkit_http` (via `behat/mink-browserkit-driver`) for headless HTTP testing, or `selenium2`/`webdriver`
+based drivers for browser testing.
 
 ## Behat 4 compatibility
 
 Step definitions in `MinkContext` now use PHP 8 attributes (`#[\Behat\Step\Given(...)]` etc.) instead of
-docblock annotations. Behat 3.31+ and Behat 4.x are both supported.
+docblock annotations. Behat 3.32+ and Behat 4.x are both supported.
 
-# Upgrade to 2.8
+Behat 4 no longer supports the classic `behat.yml` configuration format and requires PHP-based
+configuration files (`behat.php`). On Behat 3.x, `behat.yml` still works, but the format is deprecated in
+favour of `behat.php`. The documentation examples now use the `behat.php` format. If you are still using
+`behat.yml`, convert it with Behat's built-in converter (`vendor/bin/behat --convert-config`) before
+upgrading to Behat 4.
 
-## Soft `@final` and `@internal` declarations added
+## `FailureShowListener`, `SessionsListener` and `MinkExtension` are now `final`
 
-The classes `FailureShowListener`, `SessionsListener` and `MinkExtension` have been marked as `@final`. They will become `final` classes in the next major release and you will no longer be able to use them by inheritance (https://github.com/FriendsOfBehat/MinkExtension/pull/41).
+These classes are now `final` and can no longer be extended. If you relied on inheritance, use composition
+instead (wrap or decorate them, or register your own service).
 
-Additionally, the two listener classes have been marked as `@internal`. Starting with the next major version, their API may change at any time without further notice.
-
-## Deprecated drivers
-
-Support for the following drivers has been deprecated, since the underlying driver implementations have been abandoned:
-
-- GoutteDriver
-- SeleniumDriver
-- SahiDriver
-- ZombieDriver
-
-The corresponding `Factory` classes will trigger a deprecation notice when they are used to build the driver, for example
-by using `goutte` as the driver identifier in the `behat.yml` configuration file (https://github.com/FriendsOfBehat/MinkExtension/pull/39/).
-
-Note, however, that Behat currently does not have a built-in mechanism to collect such deprecation notices and display
-them in a user-friendly way.
+Additionally, `FailureShowListener` and `SessionsListener` are now marked as `@internal`. Their API may
+change at any time without further notice.
